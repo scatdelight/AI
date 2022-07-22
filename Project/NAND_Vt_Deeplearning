@@ -1,0 +1,188 @@
+import pandas as pd
+import numpy as np
+import torch
+from torch import nn
+#from torch.autograd import Variable
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
+
+data = pd.read_csv('F_train_3.csv')
+x1 = torch.from_numpy(data['Lg'].values).unsqueeze(1).float() # .float() --> float형으로 casting
+x2 = torch.from_numpy(data['Ls'].values).unsqueeze(1).float()
+x3 = torch.from_numpy(data['Tch'].values).unsqueeze(1).float()
+x4 = torch.from_numpy(data['Tto'].values).unsqueeze(1).float()
+x5 = torch.from_numpy(data['Tn'].values).unsqueeze(1).float()
+x6 = torch.from_numpy(data['Tbo'].values).unsqueeze(1).float()
+x7 = torch.from_numpy(data['cycle'].values).unsqueeze(1).float()
+
+x = torch.stack([x1, x2, x3, x4, x5, x6, x7], dim=1).squeeze()
+
+y = torch.from_numpy(data['Vt'].values).unsqueeze(1).float()
+
+
+
+#------------------------------------------------Machine Learing
+class Net(torch.nn.Module):
+    def __init__(self, n_feature, n_hidden1, n_hidden2, n_hidden3,  n_output):
+        super(Net, self).__init__()
+        self.hidden1 = torch.nn.Linear(n_feature, n_hidden1)   # hidden1 layer
+        self.hidden2 = torch.nn.Linear(n_hidden1, n_hidden2)  # hidden2 layer
+        self.hidden3 = torch.nn.Linear(n_hidden2, n_hidden3)  # hidden3 layer
+        self.predict = torch.nn.Linear(n_hidden3, n_output)   # output layer
+
+    def forward(self, x):
+        a = F.relu(self.hidden1(x))      # activation function for hidden layer
+        b = F.relu(self.hidden2(a))  # activation function for hidden layer
+        c = F.relu(self.hidden3(b))  # activation function for hidden layer
+        e = self.predict(c)             # linear output
+        return e
+
+net = Net(n_feature=7,n_hidden1=150, n_hidden2=150, n_hidden3=150,  n_output=1)     # define the network
+
+# optimizer = torch.optim.SGD(net.parameters(), lr=0.01, momentum=0.9)
+optimizer = torch.optim.Adam(net.parameters(), lr=0.00005) #lr = learning rate
+loss_func = torch.nn.MSELoss()  # this is for regression mean squared loss
+plt.ion()   # something about plotting
+
+
+Epoch = []
+Error_Test = []
+
+
+for t in range(5001):
+    prediction = net(x)  # input x and predict based on x
+    loss = loss_func(prediction, y)  # must be (1. nn output, 2. target)
+    accuracy = 100 * abs(1 - prediction.data.numpy() / y.data.numpy())
+
+
+    optimizer.zero_grad()  # clear gradients for next train
+    loss.backward()  # backpropagation, compute gradients
+    optimizer.step()  # apply gradients
+    mean = np.mean(accuracy) # 평균값
+
+
+    if t % 10 == 0:
+        # Test_Data Error
+
+        Epoch.append(t)
+        Error_Test.append(mean)
+
+
+        plt.figure(1)
+        plt.cla()
+        plt.xlim(0, 5001)
+        plt.ylim(0, 5)
+        plt.plot(Epoch, Error_Test, 'b-')
+        plt.text(100, 0.5, 'Error Rate = %.5f%%' % mean, fontdict={'size': 15, 'color': 'red'})
+        plt.text(100, 0.7, 'Iteration = %.4i' % t, fontdict={'size': 15, 'color': 'green'})
+        plt.xlabel('Epoch')
+        plt.ylabel('Error Rate relu [%] ')
+        plt.pause(0.1)
+
+#    if mean < TargetER:
+#        break
+
+plt.ioff()
+plt.show()
+
+#---------------------------------------------------Error_training_save
+Error_training= {'Epoch': Epoch,
+          'Error_Test': Error_Test}
+
+Error_training_Excel= pd.DataFrame(Error_training)
+Error_training_Excel.to_csv('Result_training_process_3.csv')
+
+
+#---------------------------------------------------ML_trainig_result_save
+
+ML_data = prediction.detach().numpy()
+# ML2 = P2.detach().numpy()
+
+ML_DATA = ML_data.squeeze().tolist()
+# M2= ML2.squeeze().tolist()
+
+CSV_out1 = pd.DataFrame(ML_DATA)
+CSV_out1.to_csv('Result_Relu_ML_training_2.csv')
+
+
+#----------------------------------------------------TCAD_test_data
+
+
+Sam = pd.read_csv('F_test_3.csv')
+
+
+S = torch.from_numpy(Sam['Vt'].values).unsqueeze(1).float()
+
+
+#------------------------------------------------------ML_test_result
+
+Pre = pd.read_csv('F_test_3.csv')
+
+T1 = torch.from_numpy(Pre['Lg'].values).unsqueeze(1).float()
+T2 = torch.from_numpy(Pre['Ls'].values).unsqueeze(1).float()
+T3 = torch.from_numpy(Pre['Tch'].values).unsqueeze(1).float()
+T4 = torch.from_numpy(Pre['Tto'].values).unsqueeze(1).float()
+T5 = torch.from_numpy(Pre['Tn'].values).unsqueeze(1).float()
+T6 = torch.from_numpy(Pre['Tbo'].values).unsqueeze(1).float()
+T7 = torch.from_numpy(Pre['cycle'].values).unsqueeze(1).float()
+
+P = torch.stack([T1, T2, T3, T4, T5, T6, T7], dim=1).squeeze()
+
+prediction_NN = net(P)
+
+
+
+#-----------------------------------------------------ML_test_result
+
+Test_result = prediction_NN
+
+ML_test = Test_result.detach().numpy()
+# ML2 = P2.detach().numpy()
+
+ML_test_3 = ML_test.squeeze().tolist()
+# M2= ML2.squeeze().tolist()
+
+CSV_out2 = pd.DataFrame(ML_test_3)
+CSV_out2.to_csv('Result_Relu_ML_test_3.csv')
+
+
+#----------------------------------------------------Evaluation
+
+
+Sample = loss_func(prediction_NN, S)  # must be (1. nn output, 2. target)
+Sample_Accuracy = 100 * abs(1 - prediction_NN.data.numpy() / S.data.numpy())
+
+
+
+Sample_Mean = np.mean(Sample_Accuracy)
+
+print(Sample_Mean)
+
+
+
+#--------------------------------------------------device_10,000
+
+Pre = pd.read_csv('device_10000_3.csv')
+
+D1 = torch.from_numpy(Pre['Lg'].values).unsqueeze(1).float()
+D2 = torch.from_numpy(Pre['Ls'].values).unsqueeze(1).float()
+D3 = torch.from_numpy(Pre['Tch'].values).unsqueeze(1).float()
+D4 = torch.from_numpy(Pre['Tto'].values).unsqueeze(1).float()
+D5 = torch.from_numpy(Pre['Tn'].values).unsqueeze(1).float()
+D6 = torch.from_numpy(Pre['Tbo'].values).unsqueeze(1).float()
+D7 = torch.from_numpy(Pre['cycle'].values).unsqueeze(1).float()
+
+D = torch.stack([D1, D2, D3, D4, D5, D6, D7], dim=1).squeeze()
+
+prediction_device = net(D)
+
+Pre_device_result = prediction_device
+
+ML_pre_device = Pre_device_result.detach().numpy()
+# ML2 = P2.detach().numpy()
+
+ML_pre_device_10000 = ML_pre_device.squeeze().tolist()
+# M2= ML2.squeeze().tolist()
+
+CSV_out3 = pd.DataFrame(ML_pre_device_10000)
+CSV_out3.to_csv('relu_pre_device_10000_result_new_3.csv')
